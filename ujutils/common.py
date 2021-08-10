@@ -13,173 +13,21 @@ from InquirerPy.validator import PathValidator
 from rich.console import Console
 from rich.table import Table
 
-
-################################################################
-# Config
-################################################################
-SELECT_SYMBOLS = {
-    'pointer': '> ',
-}
-
-CHECKBOX_SYMBOLS = {
-    'pointer': '> ',
-    'enabled_symbol': '● ',
-    'disabled_symbol': '○ ',
-}
+from .helpers import _drop_root, _linl, _filter_files
+from .config import EXTS_IMAGE, EXTS_SIGNAL, EXTS_TEXT, _STYLE, CHECKBOX_STYLE
 
 
 ################################################################
-# Helper
-################################################################
-# (helper) _is_python
-def _is_ipython() -> bool:
-    '''Check if script is executed in IPython.
-    
-    Returns
-    -------
-    bool
-       True if script is executed in IPython
-       
-    Example
-    -------
-    >>> _is_ipython()
-    '''
-    try:
-        from IPython import get_ipython
-    except:
-        return False
-    if get_ipython() is not None:
-        return True
-    return False
-
-# (helper) _drop_root
-def _drop_root(x: str) -> str:
-    '''Drop root directory from given path
-    
-    Parameter
-    ---------
-    x : str
-        relative path which starts with root path
-        
-    Returns
-    -------
-    str
-    
-    Example
-    -------
-    
-    '''
-    x = x.split('/', 1)
-    if len(x) > 0:
-        return x[-1]
-    return '.'
-
-# (helper) _sorted
-def _sorted(x: list) -> list:
-    '''Sort list by machine learning convention
-    
-    Parameters
-    ----------
-    x : list
-    
-    Returns
-    -------
-    list
-    
-    Example
-    -------
-    >>> x = ['NG1', 'NG2', 'OK', 'NG2', 'NG3']
-    >>> _sorted(x)
-    ['OK', 'NG1', 'NG2', 'NG2', 'NG3']
-    >>> x = ['test', 'val', 'train']
-    ['train', 'test', 'val']
-    '''
-    FIRST = ['', '0', 'ok', 'train']
-    MID = ['val', 'validation', 'dev', 'develop', 'development']
-    return (
-        sorted([_ for _ in x if str(_).lower() in FIRST]) 
-        + sorted([_ for _ in x if str(_).lower() in MID]) 
-        + sorted([_ for _ in x if str(_).lower() not in (FIRST+MID)])
-    )
-
-# (helper) _linl
-def _linl(x: Union[str, list], sep: str='/', _strip=True) -> list:
-    '''To list if x is not list
-    
-    Parameters
-    ----------
-    x : str or list
-        if x is str, x will be split
-    sep : str
-        seperator like ',', '/'
-    _strip : bool
-        strip seperator at left-end or right-end
-    
-    Returns
-    -------
-    list
-    
-    Example
-    -------
-    >>> x = 'a/b/c/d'
-    >>> _linl(x, sep='/')
-    ['a', 'b', 'c', 'd']
-    >>> x = ['a', 'b', 'c', 'd']
-    >>> _linl(x, sep='/')
-    ['a', 'b', 'c', 'd']
-    '''
-    
-    if isinstance(x, list):
-        return x
-    
-    if _strip:
-        x = x.strip(sep)
-        
-    return x.split(sep)
-
-# (helper) _filter_files
-def _filter_files(files:list, extensions:list=None, subdirs:list=None) -> list:
-    '''Filter list of files by extensions and/or subdirs
-    
-    Parameters
-    ----------
-    files : list
-    
-    Returns
-    -------
-    list
-        list of files (filtered)
-        
-    Example
-    -------
-    >>> files = ['data/test/OK/01.jpg', 'data/train/NG/02.wav', 'data/train/NG/02.png', 'data/info/README.md', 'data/info/logo.jpg']
-    >>> _filter_files(files, extensions=['jpg', 'png'], subdirs=['data/test/OK', 'data/test/NG', 'data/train/OK', 'data/train/NG'])
-    ['data/test/OK/01.jpg', 'data/train/NG/02.jpg']
-    '''    
-    if extensions is None:
-        if subdirs is None:
-            return files
-        
-    files = [_ for _ in files if os.path.isfile(_)] 
-    
-    if extensions is not None:
-        if not isinstance(extensions, list): 
-            extensions = [extensions]
-        files = [x for x in files if x.rsplit('.', 1)[-1].lower() in extensions]
-        
-    if subdirs is not None:
-        if not isinstance(subdirs, list):
-            subdirs = [subdirs]
-        files = [x for x in files if os.path.dirname(x) in subdirs]
-        
-    return files
-
-
-################################################################
-# Helper - CLI Inquirer
+# CLI helpers
 ################################################################
 # (helper) _user_select_extensions
 def _user_select_extensions():
+    """User select extensions
+
+    Returns:
+        [type]: [description]
+    """
+
     '''User selects extensions
     
     Returns
@@ -187,39 +35,40 @@ def _user_select_extensions():
     None or list
         None means all extensions
     '''
-    EXTENSIONS = {
+    choices = {
         'All': None,
-        'Image': ['jpg', 'png', 'gif', 'tiff'],
-        'Signal/Audio': ['wav', 'mp4', 'tdms'],
-        'Text/Table': ['txt', 'csv', 'xls', 'xlsx'],
+        'Image': EXTS_IMAGE,
+        'Signal/Audio': EXTS_SIGNAL,
+        'Text/Table': EXTS_TEXT,
+        'Manual select': '__manual'
     }
     
-    # select extensions
-    choices = [
-        {'name': f"{k} ({v})", 'value': v} for k, v in EXTENSIONS.items()
-    ]
-    choices = choices + [{'name': "User Input", 'value': "__"}]
-    
-    return inquirer.select(
+    extensions = inquirer.select(
         message="Select extensions to scan:",
-        choices=choices,
+        choices=[{'name': k, 'value': v} for k, v in choices.items()],
         default="All",
-        **SELECT_SYMBOLS,
+        **_STYLE,
     ).execute()
+
+    if extensions == '__manual':
+        extensions = inquirer.text(
+            message="Enter extensions (',' seperated):",
+        ).execute()
+        extensions = _linl(extensions, sep=',', strip='. ')
+
+    return extensions
+
 
 # (helper) _user_select_subdirs
 def _user_select_subdirs(files: list) -> list:
-    '''User selects subdirs from checkbox
-    
-    Parameters
-    ----------
-    files : list
-    
-    Returns
-    -------
-    list
-        list of selected sub-directories
-    '''
+    """User selects subdirs from checkbox
+
+    Args:
+        files (list): list of files
+
+    Returns:
+        list: list of selected subdirs
+    """
     _dirs = Counter(
         sorted([os.path.dirname(x) for x in files])
     )
@@ -236,8 +85,9 @@ def _user_select_subdirs(files: list) -> list:
         validate=lambda x: len(x) > 0,
         invalid_message="Should be at least 1 selection",
         instruction="(select at least 1, ctrl+C for quit)",
-        **CHECKBOX_SYMBOLS,
+        **CHECKBOX_STYLE,
     ).execute()
+
 
 # (helper) _get_levs_from_hrchy
 def _user_set_hrchy(subdirs: list) -> list:
@@ -312,67 +162,88 @@ def _cli_preview_table(df, title=None, tbl_no=None, n_head=10, n_tail=10, consol
 ################################################################
 # Functions
 ################################################################
-# df_files
-def df_files(root, hrchy:str=None, subdirs:list=None, extensions:list=None, meta:bool=False, dst_path=None):
-    '''
-    Scan root directory and return dataframe of file information.
-    '''  
-    # check is executed in ipython
-    IS_IPYTHON = _is_ipython()
+# (helper) _is_python
+def is_ipython() -> bool:
+    '''Check if script is executed in IPython.
     
-    # console
-    if not IS_IPYTHON:
-        console = Console()
-        console.print()
-        
-    # to list if not list
+    Returns
+    -------
+    bool
+       True if script is executed in IPython
+       
+    Example
+    -------
+    >>> is_ipython()
+    '''
+    try:
+        from IPython import get_ipython
+    except:
+        return False
+    if get_ipython() is not None:
+        return True
+    return False
+
+
+# (helper) sorted
+def ml_sorted(x: list) -> list:
+    '''Sort list by machine learning convention
+    
+    Example
+    -------
+    >>> x = ['NG1', 'NG2', 'OK', 'NG2', 'NG3']
+    >>> _sorted(x)
+    ['OK', 'NG1', 'NG2', 'NG2', 'NG3']
+    >>> x = ['test', 'val', 'train']
+    ['train', 'test', 'val']
+    '''
+    FIRST = ['', '0', 'ok', 'train']
+    SECOND = ['val', 'validation', 'dev', 'develop', 'development']
+
+    return (
+        sorted([elem for elem in x if str(elem).lower() in FIRST])
+        + sorted([elem for elem in x if str(elem).lower() in SECOND])
+        + sorted([elem for elem in x if str(elem).lower() not in FIRST + SECOND])
+    )
+
+
+# df_files
+def df_files(
+    root: str=None,
+    snapshot: DirectorySnapshot=None,
+    hrchy: Union[str, list]=None, 
+    subdirs: Union[str, list]=None, 
+    extensions: Union[str, list]=None,
+    include_meta: bool=False,
+    ) -> pd.DataFrame:
+    '''Make dataframe of list of files
+
+    Example
+    -------
+    >>> df = df_files('./dataset')
+    '''
+    assert (root is not None) or (snapshot is not None), "[EXIT] 'root' or 'files' should be given"
+    
+    # temporary field
+    TEMP_FIELD = '__label'
+
+    # correct inputs
+    root = os.path.relpath(root)
     if hrchy is not None:
         hrchy = _linl(hrchy, sep='/')
     if extensions is not None:
         extensions = _linl(extensions, sep=',')
-    
+
     # take a snapshot
-    snapshot = DirectorySnapshot(root)
+    if snapshot is None:
+        snapshot = DirectorySnapshot(root)
     files = sorted([fp for fp in snapshot.paths if os.path.isfile(fp)])
-    
-    # filter extensions
-    if not IS_IPYTHON:
-        if extensions is None:
-            extensions = _user_select_extensions()
+
     if extensions is not None:
         files = _filter_files(files, extensions=extensions)
-        if len(files) == 0:
-            raise FileNotFoundError("File not found")
-            
-    # check whether meta is included
-    if not IS_IPYTHON:
-        meta = inquirer.confirm(
-            message="Include metadata? (size, modified time):",
-            default=False
-        ).execute()
-           
-    # filter subdirs
-    if not IS_IPYTHON:
-        if subdirs is None:
-            subdirs = _user_select_subdirs(files)
+
     if subdirs is not None:
         files = _filter_files(files, subdirs=subdirs)
-        if len(files) == 0:
-            raise FileNotFoundError("File not found")
         
-    # set column names
-    if not IS_IPYTHON:
-        if hrchy is None:
-            if subdirs is None:
-                subdirs = sorted({os.path.dirname(x) for x in files})
-            hrchy = _user_set_hrchy(subdirs)
-    
-    # set filepath to save
-    if not IS_IPYTHON:
-        dst_path = inquirer.text(
-            message="Enter path to save (csv, xlsx are only supported):",
-        ).execute()
-    
     # create table
     df = pd.DataFrame({
         '__label': [x.rsplit('/', 1)[0] for x in files],
@@ -381,7 +252,7 @@ def df_files(root, hrchy:str=None, subdirs:list=None, extensions:list=None, meta
     })
     
     # concat meta (size, created)
-    if meta:
+    if include_meta:
         _meta = pd.DataFrame({
             'size': [snapshot._stat_info[fp].st_size for fp in files],
             'modified': [datetime.fromtimestamp(snapshot._stat_info[fp].st_mtime) for fp in files],
@@ -389,41 +260,79 @@ def df_files(root, hrchy:str=None, subdirs:list=None, extensions:list=None, meta
         df = pd.concat([df, _meta], axis=1)
         
     # concat labels
-    labels = df['__label'].str.split('/', expand=True).iloc[:, 1:]
+    labels = df[TEMP_FIELD].str.split('/', expand=True).iloc[:, 1:]
     _ncols = labels.shape[1]
     
+    # set column names
     if hrchy is None:
         columns = [f"_lv{i+1}" for i in range(_ncols)]
     else:
         columns = hrchy + [f"_lv{i+1}" for i in range(len(hrchy), _ncols)]
-    
     labels.columns = columns
-    df = pd.concat([labels, df.drop(columns='__label')], axis=1)
-    df = df.sort_values(by=columns, ascending=False).reset_index(drop=True)
+
+    # concat labels and list of files
+    df = (
+        pd
+        .concat([labels, df.drop(columns=TEMP_FIELD)], axis=1)
+        .sort_values(by=columns, ascending=False).reset_index(drop=True)
+    )
     
-    # preview
-    if not IS_IPYTHON:
-        _cli_preview_table(df, title=f"\n[Result] Results (total {len(df)} rows)", console=console)
-        print('')
+    return df
+
+
+# df_files
+def cli_df_files(root):
+    '''
+    Scan root directory and return dataframe of file information.
+    '''  
+    assert is_ipython() is False, "[ERROR] This CLI does not support IPython." 
+
+    # rich console
+    console = Console()
+    
+    # take a snapshot
+    snapshot = DirectorySnapshot(root)
+    files = sorted([fp for fp in snapshot.paths if os.path.isfile(fp)])
+
+    # select extensions and filter
+    extensions = _user_select_extensions()
+    files = _filter_files(files, extensions=extensions)
+            
+    # check whether meta is included
+    include_meta = inquirer.confirm(
+        message="Include metadata? (size, modified time):",
+        default=False
+    ).execute()
+           
+    # select subdirs and filter
+    subdirs = _user_select_subdirs(files)
+        
+    # set column names
+    subdirs = sorted({os.path.dirname(x) for x in files})
+    hrchy = _user_set_hrchy(subdirs)
+    
+    # set filepath to save
+    dst_path = inquirer.text(
+        message="Enter path to save ('csv', 'xlsx' are only supported):",
+    ).execute()
+    
+    # create table
+    df = df_files(snapshot=snapshot, hrchy=hrchy, subdirs=subdirs, extensions=extensions, include_meta=include_meta)
+    
+    # preview results
+    _cli_preview_table(df, title=f"\n[Result] Results (total {len(df)} rows)", console=console)
+    print('')
         
     # save df
-    if dst_path is not None:
-        confirm = True
-        if not IS_IPYTHON:
-            confirm = inquirer.confirm(
-                message=f"Save '{dst_path}'?:"
-            ).execute()
-        if confirm:
-            if dst_path.lower().endswith('.csv'):
-                df.to_csv(dst_path, index=False)
-                return
-
-            if dst_path.lower().endswith('.xls'):
-                dst_path = dst_path.lower().replace('.xls', '.xlsx')
-                print(f"[WARN] '.xls' is not supported. '{dst_path}' will be saved.")
-
-            if dst_path.lower().endswith('.xlsx'):
-                df.to_excel(dst_path, index=False)
-                return
+    if inquirer.confirm(
+            message=f"Save '{dst_path}'?:",
+            default=False
+        ).execute():
         
-    return df
+        if dst_path.lower().endswith('.csv'):
+            df.to_csv(dst_path, index=False)
+            return
+
+        if dst_path.lower().endswith('.xlsx'):
+            df.to_excel(dst_path, index=False)
+            return
