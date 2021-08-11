@@ -5,3 +5,4 @@ inquirerpy>=0.2.3
 rich>=10.7.0
 joblib>=1.0.1
 natsort>=7.1.1
+pyarrow>=5.0.0

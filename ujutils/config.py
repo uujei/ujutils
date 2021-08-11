@@ -1,10 +1,10 @@
 
-#### EXTENSIONS
+# EXTENSIONS
 EXTS_IMAGE = ['jpg', 'png', 'gif', 'bmp', 'tiff']
 EXTS_SIGNAL = ['wav', 'mp3', 'tmds']
 EXTS_TEXT = ['csv', 'txt', 'xls', 'xlsx']
 
-#### INQUIRER STYLES
+# INQUIRER STYLES
 POINTER = '> '
 ENABLED_SYMBOL = '● '
 DISABLED_SYMBOL = '○ '

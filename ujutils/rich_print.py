@@ -1,20 +1,30 @@
+import os
+from typing import Union
+
 import pandas as pd
 from rich.console import Console
+from rich.filesize import decimal
+from rich.markup import escape
 from rich.table import Table
+from rich.text import Text
+from rich.tree import Tree
+
+from .misc import _linl
+
 
 # rich_table
 def rich_table(
-    df: pd.DataFrame, 
-    title: str=None, 
-    tbl_no: int=None, 
-    head: int=None, 
-    tail: int=None, 
-    console: Console=None
-    ):
-    
-    # table 
+    df: pd.DataFrame,
+    title: str = None,
+    tbl_no: int = None,
+    head: int = None,
+    tail: int = None,
+    console: Console = None
+):
+
+    # table
     table = Table()
-    
+
     # title
     if title is not None:
         table.title = title
@@ -43,3 +53,126 @@ def rich_table(
         console = Console()
 
     console.print(table)
+
+
+# rich_tree
+def _generate_tree(
+    root: Union[str, os.DirEntry],
+    tree: Tree,
+    extensions: Union[str, list] = None,
+    max_files: int = 3,
+    incl_hidden: bool = False,
+) -> Tree:
+    """Recursively build a Tree with directory contents."""
+
+    DIR_ICON = ''
+    DIR_COLOR = 'blue'
+    FILE_ICON = ''
+    FILE_COLOR = 'white'
+    EXTENSION_COLOR = 'white'
+
+    # correct args
+    if extensions is not None:
+        extensions = _linl(extensions, sep=',', strip='. ')
+
+    # sort dirs first then by filename
+    entries = sorted(
+        os.scandir(root),
+        key=lambda path: (os.path.isfile(path), path.path.lower()),
+    )
+
+    # split directories and files
+    dirs, paths = [], []
+    _ = [dirs.append(_) if _.is_dir() else paths.append(_) for _ in entries]
+
+    # filter extensions
+    if extensions is not None:
+        paths = [
+            _ for _ in paths if os.path.splitext(_)[-1][1:] in extensions
+        ]
+
+    # ellipse paths
+    n_paths = len(paths)
+    ellipsis = None
+    if max_files is not None:
+        if n_paths > max_files:
+            _size = decimal(
+                sum(_.stat().st_size for _ in paths[max_files:])
+            )
+            _exts = ', '.join(sorted(set(
+                    _.name.rsplit('.', 1)[-1] for _ in paths[max_files:]
+            )))
+            ellipsis = ' '.join([
+                f"... {n_paths - max_files} more files ",
+                f"(total {_size} w/ {_exts})"
+            ])
+            paths = paths[:max_files]
+
+    # add directory nodes
+    for _dir in dirs:
+        # ignore hidden files
+        if _dir.name.startswith("."):
+            if not incl_hidden:
+                continue
+
+        # add branch
+        style = "dim" if _dir.name.startswith("__") else ""
+        _text = ''.join([
+            f"[bold {DIR_COLOR}]{DIR_ICON}",
+            f"[link file://{_dir}]{escape(_dir.name)}"
+        ])
+        branch = tree.add(
+            _text, style=style, guide_style=style,
+        )
+        _generate_tree(
+            _dir, branch,
+            extensions=extensions, max_files=max_files, incl_hidden=incl_hidden
+        )
+
+    # add file nodes
+    for path in paths:
+        # Remove hidden files
+        if path.name.startswith("."):
+            if not incl_hidden:
+                continue
+
+        file_size = path.stat().st_size
+        _text = Text(f"{FILE_ICON}{path.name}", FILE_COLOR)
+        _text.stylize(f"link file://{path}")
+        _text.append(f" ({decimal(file_size)})", EXTENSION_COLOR)
+        tree.add(_text)
+
+    # add ellepsis
+    if ellipsis is not None:
+        _text = Text(f"{FILE_ICON}{ellipsis}", FILE_COLOR)
+        tree.add(_text)
+
+
+# rich_tree
+def rich_tree(
+    root,
+    extensions: Union[str, list] = None,
+    max_files: int = 10,
+    incl_hidden=False,
+    console=None
+):
+
+    GUIDE_STYLE = "white"
+
+    root = os.path.abspath(root)
+    tree = Tree(
+        f"(root) [link file://{root}]{root}",
+        guide_style=GUIDE_STYLE,
+    )
+    _generate_tree(
+        root, tree,
+        extensions=extensions, max_files=max_files, incl_hidden=incl_hidden
+    )
+
+    if console is None:
+        console = Console()
+
+    console.print(tree)
+
+
+# END

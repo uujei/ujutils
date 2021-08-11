@@ -4,10 +4,11 @@ from typing import Union
 
 import numpy as np
 import pandas as pd
-from watchdog.utils.dirsnapshot import DirectorySnapshot
 from natsort import natsorted
+from watchdog.utils.dirsnapshot import DirectorySnapshot
 
-from .helpers import _filter_files, _linl
+from .misc import _filter_files, _linl
+from .rich_print import rich_tree
 
 
 ################################################################
@@ -84,6 +85,13 @@ def mlsorted(x: list, order: list = None) -> list:
 
 
 ################################################################
+# tree_files
+# from rich_print.rich_tree
+################################################################
+tree_files = rich_tree
+
+
+################################################################
 # table_files
 ################################################################
 def table_files(
@@ -122,15 +130,12 @@ def table_files(
         pd.DataFrame
     """
 
-    assert (root is not None) or (
-        snapshot is not None
-    ), "[EXIT] 'root' or 'files' should be given"
-
     # temporary field
     TEMP_FIELD = "__label"
 
     # correct inputs
-    root = os.path.relpath(root)
+    if root is not None:
+        root = os.path.relpath(root)
     if hrchy is not None:
         hrchy = _linl(hrchy, sep="/")
     if extensions is not None:
@@ -179,14 +184,17 @@ def table_files(
     _ncols = labels.shape[1]
 
     # set column names
-    if hrchy is None:
-        columns = [f"_lv{i+1}" for i in range(_ncols)]
-    else:
-        columns = hrchy + [f"_lv{i+1}" for i in range(len(hrchy), _ncols)]
-    labels.columns = columns
+    if _ncols > 0:
+        if hrchy is None:
+            columns = [f"_lv{i+1}" for i in range(_ncols)]
+        else:
+            columns = hrchy + [f"_lv{i+1}" for i in range(len(hrchy), _ncols)]
+        labels.columns = columns
 
-    # concat labels and list of files
-    df = pd.concat([labels, df.drop(columns=TEMP_FIELD)], axis=1)
+        # concat labels and list of files
+        df = pd.concat([labels, df.drop(columns=TEMP_FIELD)], axis=1)
+    else:
+        df = df.drop(columns=TEMP_FIELD)
 
     return df
 
@@ -226,7 +234,8 @@ def encode_labels(
         labels (list, np.ndarray): List of labels with string elements.
         output (str, optional): 'multi-label' or 'multi-class'.
         sep (str, optional): For multi-label only. Default is '|'.
-        return_df (bool, optional): For multi-label only. If true, return DataFrame. Defaults to False.
+        return_df (bool, optional):
+            If true, return DataFrame. Defaults is False.
 
     Returns:
         list or np.array: Coded labels. List in list out, array in array out.

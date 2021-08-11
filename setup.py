@@ -14,6 +14,12 @@ URL = ''
 DOWNLOAD_URL = os.path.join(URL, 'archive', f"{VERSION}.tar.gz")
 INSTALL_REQUIREMENTS = parse_requirements('requirements.txt')
 PACKAGES = find_packages()
+ENTRY_POINTS = {
+    'console_scripts': [
+        'uj-table-files = ujutils.scripts.common:cli_table_files',
+        'uj-tree = ujutils.scripts.common:cli_tree_files',
+    ],
+}
 KEYWORDS = []
 PYTHON_REQUIRES = '>=3'
 ZIP_SAFE = False
@@ -36,6 +42,7 @@ setup(
     download_url=DOWNLOAD_URL,
     install_requires=INSTALL_REQUIREMENTS,
     packages=PACKAGES,
+    entry_points=ENTRY_POINTS,
     keywords=KEYWORDS,
     python_requires=PYTHON_REQUIRES,
     zip_safe=ZIP_SAFE,
