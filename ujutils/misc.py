@@ -1,7 +1,27 @@
 import os
-from typing import Union
+from typing import Union, Callable
 import numpy as np
 import pandas as pd
+
+
+# _get_ext
+def _get_ext(x: Union[str, os.DirEntry]):
+    """Parse extensions from filepath
+
+    (Note) Return without starting '.'.
+
+    Examples:
+        >>> x = 'dir/filepath.jpg'
+        >>> _get_ext(x)
+        'jpg'
+
+    Args:
+        x (str, list): Filepath to parse.
+
+    Returns:
+        str: Extension of x.
+    """
+    return os.path.splitext(x)[-1][1:].lower()
 
 
 # _drop_root
@@ -23,7 +43,7 @@ def _drop_root(x: str) -> str:
 def _linl(
     x: Union[str, list],
     sep: str = '/',
-    strip: str = ' ',
+    strip: str = ' '
 ) -> list:
     """To list if x is not list
 
@@ -36,7 +56,7 @@ def _linl(
         ['a', 'b', 'c', 'd']
 
     Args:
-        x (Union[str, list]): Input string.
+        x (str, list): Input string.
         sep (str, optional): Separator. Defaults to '/'.
         strip (str, optional): Character to strip. Defaults is ' '.
 
@@ -58,7 +78,35 @@ def _linl(
     return x
 
 
+# _sorted
+def _sorted(
+    x: Union[list, dict],
+    key: Callable = None,
+    reverse: bool = False
+):
+    """Sort list and dictionary
+
+    Args:
+        x (list, dict): To sort.
+        key (Callable, optional): 'key' in internal 'sorted'. Defaults to None.
+        reverse (bool): 'reverse' in internal 'sorted'. Defaults to False.
+
+    Raises:
+        TypeError: Only list and dict are supported
+
+    Returns:
+        list or dict
+    """
+    _keys = sorted(x, key=key, reverse=reverse)
+    if isinstance(x, list):
+        return _keys
+    if isinstance(x, dict):
+        return {_key: x[_key] for _key in _keys}
+    raise TypeError(f"[ERROR] Type {type(x)} is not supported.")
+
 # _filter_files
+
+
 def _filter_files(
     files: list,
     extensions: list = None,

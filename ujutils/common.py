@@ -1,13 +1,16 @@
 import os
+from collections import Counter
 from datetime import datetime
 from typing import Union
 
 import numpy as np
 import pandas as pd
 from natsort import natsorted
+from rich.console import Console
+from rich.filesize import decimal
 from watchdog.utils.dirsnapshot import DirectorySnapshot
 
-from .misc import _filter_files, _linl
+from .misc import _filter_files, _get_ext, _linl, _sorted
 from .rich_print import rich_tree
 
 
@@ -85,17 +88,77 @@ def mlsorted(x: list, order: list = None) -> list:
 
 
 ################################################################
+# scnadir
+################################################################
+def scandir(
+    root: Union[str, os.DirEntry],
+    extensions: Union[str, os.DirEntry] = None,
+    subdirs: Union[str, os.DirEntry] = None,
+) -> dict:
+    """Scan directory recursively
+
+    (Note)
+        It returns dict. Keys are subdir, values are filepaths in the subdir.
+
+    Args:
+        root (str, os.DirEntry): Root directory to scan.
+        extensions (str, os.DirEntry, optional): Extensions. Defaults to None.
+
+    Returns:
+        dict: Key is directory and value is files in the directory.
+    """
+
+    # correct args
+    extensions = _linl(extensions, sep=',', strip='. ')
+
+    # (helper) scandir
+    def _scandir(root, results, extensions, subdirs):
+
+        # scandir
+        dirs, files = [], []
+        _ = [
+            dirs.append(_) if _.is_dir() else files.append(_)
+            for _ in os.scandir(root)
+        ]
+        n_entries = len(_)
+        n_files = len(files)
+
+        if extensions is not None:
+            files = [_ for _ in files if _get_ext(_) in extensions]
+
+        # update
+        results[root] = {
+            'dirs': dirs,
+            'files': files,
+            'n_entries': n_entries,
+            'n_files': n_files,
+        }
+
+        for d in dirs:
+            if subdirs is not None:
+                if d in subdirs:
+                    continue
+            _scandir(d, results, extensions, subdirs)
+
+    # scan recursively
+    results = dict()
+    _scandir(root, results, extensions, subdirs)
+
+    return results
+
+
+################################################################
 # tree_files
 # from rich_print.rich_tree
 ################################################################
-tree_files = rich_tree
+tree = rich_tree
 
 
 ################################################################
 # table_files
 ################################################################
 def table_files(
-    root: str = None,
+    root: str = '.',
     snapshot: DirectorySnapshot = None,
     hrchy: Union[str, list] = None,
     subdirs: Union[str, list] = None,
@@ -289,3 +352,73 @@ def encode_labels(
             coded_labels = np.array(coded_labels, dtype=np.int32)
 
     return coded_labels, encoder, decoder
+
+
+################################################################
+# encode labels
+################################################################
+def inspect_dir(root, console=None):
+
+    # duplicated
+    # extensions
+    # empty folder
+
+    if console is None:
+        console = Console()
+
+    # start message
+    _abspath = os.path.abspath('.')
+    console.print(f"[bold yellow][Start][/bold yellow] Inspect {_abspath}")
+
+    # take a snapshot
+    results = scandir(root)
+
+    # directory summary
+    subdirs = [_.path for k, v in results.items() for _ in v['dirs']]
+    subdirs_empty = [k for k, v in results.items() if v['n_entries'] == 0]
+    depths = [len(_.split('/')) for _ in subdirs]
+    _max_depth = max(depths)
+
+    msg = [
+        f"Total {len(subdirs)} directories are found.",
+        f"  - Maximum depth is {_max_depth}."
+    ]
+
+    if len(subdirs_empty) > 0:
+        msg += [f"  - {len(subdirs_empty)} directories are empty end."]
+        for _ in subdirs_empty:
+            msg += [f"    . '{_.path}' is empty"]
+
+    console.print('\n' + '\n'.join(msg))
+
+    # file summary
+    files = [_ for k, v in results.items() for _ in v['files']]
+    filenames = [(_.name, _.stat().st_size) for _ in files]
+    exts = [_get_ext(_) for _ in files]
+    n_exts = len(exts)
+    count_exts = dict(Counter(exts))
+    count_exts = _sorted(count_exts, key=lambda _: count_exts[_], reverse=True)
+
+    msg = [
+        f"Total {len(files)} files are found.",
+        f"  - {n_exts} extensions are found."
+    ]
+
+    for k, v in count_exts.items():
+        _k = f".{k}" if len(k) > 0 else ""
+        msg += [f"    . '{_k}' {v} files."]
+
+    if len(files) != len(set(filenames)):
+        count_files = dict(Counter(filenames))
+        count_files = {k: v for k, v in count_files.items() if v > 1}
+        count_files = _sorted(
+            count_files, lambda _: (count_files[_]), reverse=True
+        )
+        msg += [f"  - {len(count_files)} files might be duplicated."]
+        for k, v in count_files.items():
+            msg += [f"    . {v} '{k[0]}' ({decimal(k[1])}) found."]
+
+    console.print('\n' + '\n'.join(msg))
+
+    # Done
+    console.print("\n[bold yellow][Done][/bold yellow]\n")

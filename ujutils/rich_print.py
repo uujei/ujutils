@@ -9,19 +9,26 @@ from rich.table import Table
 from rich.text import Text
 from rich.tree import Tree
 
-from .misc import _linl
+from .misc import _linl, _head_tail
 
 
 # rich_table
 def rich_table(
     df: pd.DataFrame,
     title: str = None,
-    tbl_no: int = None,
     head: int = None,
     tail: int = None,
     console: Console = None
 ):
+    """Display fataframe using rich
 
+    Args:
+        df (pd.DataFrame): Dataframe to display
+        title (str, optional): Title. Defaults to None.
+        head (int, optional): n head to display. Defaults to None.
+        tail (int, optional): n tail to display. Defaults to None.
+        console (Console, optional): rich console. Defaults to None.
+    """
     # table
     table = Table()
 
@@ -35,17 +42,18 @@ def rich_table(
         table.add_column(c, justify='left', )
 
     # add rows
-    n = sum(filter(None, [head, tail]))
-    if head is None and tail is None or n > len(df):
+    if head is None and tail is None:
         for idx in df.index:
             table.add_row(*[str(_) for _ in df.loc[idx, :].values])
     else:
-        if head is not None:
+        _head, _tail = _head_tail(df, head=head, tail=tail)
+        if _head is not None:
             for idx in df.index[:head]:
                 table.add_row(*[str(_) for _ in df.loc[idx, :].values])
-        for _ in range(1):
-            table.add_row(*['...' for _ in df.columns])
-        if tail is not None:
+        if len(_head) < len(df):
+            for _ in range(1):
+                table.add_row(*['...' for _ in df.columns])
+        if _tail is not None:
             for idx in df.index[-tail:]:
                 table.add_row(*[str(_) for _ in df.loc[idx, :].values])
 
@@ -150,12 +158,21 @@ def _generate_tree(
 
 # rich_tree
 def rich_tree(
-    root,
+    root: Union[str, os.DirEntry] = '.',
     extensions: Union[str, list] = None,
-    max_files: int = 10,
+    max_files: int = 3,
     incl_hidden=False,
     console=None
 ):
+    """Print tree of files
+
+    Args:
+        root (Union[str, os.DirEntry]): Root directory of tree.
+        extensions (Union[str, list], optional): Defaults to None.
+        max_files (int, optional): The excess will be omitted. Defaults to 3.
+        incl_hidden (bool, optional): Defaults to False.
+        console ([type], optional): Rich console. Defaults to None.
+    """
 
     GUIDE_STYLE = "white"
 

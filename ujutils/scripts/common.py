@@ -1,12 +1,13 @@
 import itertools
 import os
 from collections import Counter
+
 import click
 from InquirerPy import inquirer
 from rich.console import Console
 from watchdog.utils.dirsnapshot import DirectorySnapshot
 
-from ..common import mlsorted, table_files
+from ..common import mlsorted, table_files, inspect_dir
 from ..config import _STYLE, CHECKBOX_STYLE, EXTS_IMAGE, EXTS_SIGNAL, EXTS_TEXT
 from ..misc import _drop_root, _filter_files, _linl
 from ..rich_print import rich_table, rich_tree
@@ -126,7 +127,7 @@ def _user_set_hrchy(subdirs: list) -> list:
 # table_files
 @click.command()
 @click.argument('root', nargs=1)
-def cli_table_files(root):
+def cli_table_files(root='.'):
     "Scan directory and return table of files"
 
     # rich console
@@ -240,3 +241,14 @@ def cli_tree_files(root, extensions, max_files, incl_hidden):
         max_files=max_files,
         incl_hidden=incl_hidden,
     )
+
+
+################################################################
+# scnadir
+################################################################
+@click.command()
+@click.argument('root', nargs=1)
+def cli_inspect_dir(root='.'):
+    """Inspect directory"""
+
+    inspect_dir(root)
