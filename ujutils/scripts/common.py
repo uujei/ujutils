@@ -226,7 +226,7 @@ def cli_table_files(root='.'):
 )
 @click.option(
     '-m', '--max-files', type=int, default=3, show_default=True,
-    help='Max files to display.'
+    help="Max files to display. ('-1' to display all.)"
 )
 @click.option(
     '-h', '--shown-hidden', 'incl_hidden', is_flag=True,
@@ -234,6 +234,9 @@ def cli_table_files(root='.'):
 )
 def cli_tree_files(root, extensions, max_files, incl_hidden):
     "Scan directory and return tree of files"
+
+    if max_files < 0:
+        max_files = None
 
     rich_tree(
         root=root,

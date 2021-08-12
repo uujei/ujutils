@@ -12,7 +12,9 @@ from rich.tree import Tree
 from .misc import _linl, _head_tail
 
 
+################################################################
 # rich_table
+################################################################
 def rich_table(
     df: pd.DataFrame,
     title: str = None,
@@ -63,13 +65,16 @@ def rich_table(
     console.print(table)
 
 
-# rich_tree
+################################################################
+# (helper for rich_tree) _generate_tree
+################################################################
 def _generate_tree(
     root: Union[str, os.DirEntry],
     tree: Tree,
     extensions: Union[str, list] = None,
     max_files: int = 3,
     incl_hidden: bool = False,
+    _info: dict = None,
 ) -> Tree:
     """Recursively build a Tree with directory contents."""
 
@@ -82,6 +87,13 @@ def _generate_tree(
     # correct args
     if extensions is not None:
         extensions = _linl(extensions, sep=',', strip='. ')
+    if _info is None:
+        _info = {
+            'n_entries': 0,
+            'n_dirs': 0,
+            'n_files': 0,
+            'n_files_selected': 0,
+        }
 
     # sort dirs first then by filename
     entries = sorted(
@@ -93,11 +105,17 @@ def _generate_tree(
     dirs, paths = [], []
     _ = [dirs.append(_) if _.is_dir() else paths.append(_) for _ in entries]
 
+    _info['n_entries'] += len(_)
+    _info['n_dirs'] += len(dirs)
+    _info['n_files'] += len(paths)
+
     # filter extensions
     if extensions is not None:
         paths = [
             _ for _ in paths if os.path.splitext(_)[-1][1:] in extensions
         ]
+
+    _info['n_files_selected'] += len(paths)
 
     # ellipse paths
     n_paths = len(paths)
@@ -134,7 +152,10 @@ def _generate_tree(
         )
         _generate_tree(
             _dir, branch,
-            extensions=extensions, max_files=max_files, incl_hidden=incl_hidden
+            extensions=extensions,
+            max_files=max_files,
+            incl_hidden=incl_hidden,
+            _info=_info
         )
 
     # add file nodes
@@ -156,7 +177,9 @@ def _generate_tree(
         tree.add(_text)
 
 
+################################################################
 # rich_tree
+################################################################
 def rich_tree(
     root: Union[str, os.DirEntry] = '.',
     extensions: Union[str, list] = None,
@@ -182,8 +205,11 @@ def rich_tree(
         guide_style=GUIDE_STYLE,
     )
     _generate_tree(
-        root, tree,
-        extensions=extensions, max_files=max_files, incl_hidden=incl_hidden
+        root,
+        tree,
+        extensions=extensions,
+        max_files=max_files,
+        incl_hidden=incl_hidden
     )
 
     if console is None:
