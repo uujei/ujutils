@@ -232,7 +232,7 @@ def cli_table_files(root='.'):
     '-h', '--shown-hidden', 'incl_hidden', is_flag=True,
     help="Show hidden files."
 )
-def cli_tree_files(root, extensions, max_files, incl_hidden):
+def cli_tree(root, extensions, max_files, incl_hidden):
     "Scan directory and return tree of files"
 
     if max_files < 0:

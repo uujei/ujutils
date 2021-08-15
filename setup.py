@@ -18,7 +18,7 @@ ENTRY_POINTS = {
     'console_scripts': [
         'uj-table-files = ujutils.scripts.common:cli_table_files',
         'uj-tree = ujutils.scripts.common:cli_tree',
-        'uj-inspect-dir = ujutils.script.common:cli_inspect_dir'
+        'uj-inspect-dir = ujutils.scripts.common:cli_inspect_dir'
     ],
 }
 KEYWORDS = []
