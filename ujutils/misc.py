@@ -1,7 +1,10 @@
 import os
-from typing import Union, Callable
+from typing import Callable, Union
+
 import numpy as np
 import pandas as pd
+
+from .config import ML_WORD_ORDER
 
 
 # _get_ext
@@ -24,7 +27,7 @@ def _get_ext(x: Union[str, os.DirEntry]):
     return os.path.splitext(x)[-1][1:].lower()
 
 
-# _drop_root
+# _drop_root - DEPRECATED
 def _drop_root(x: str) -> str:
     """Drop root from path
 
@@ -78,6 +81,36 @@ def _linl(
     return x
 
 
+# _gen_ordering_func
+def _gen_ordering_func(order=None):
+
+    if order is None:
+        order = ML_WORD_ORDER
+
+    # generate map
+    _order = dict()
+    for i, _list in enumerate(order):
+        if not isinstance(_list, list):
+            _list = [_list]
+        _order.update(
+            {_elem: f"{str(i)}_" for _elem in _list}
+        )
+
+    # define translate
+    def _translate(x: str, order: dict = _order):
+
+        if x is not None:
+            if isinstance(x, os.DirEntry):
+                x = x.path
+            x = x.lower()
+            for k, v in order.items():
+                x = x.replace(k, v)
+
+        return x
+
+    return _translate
+
+
 # _sorted
 def _sorted(
     x: Union[list, dict],
@@ -104,9 +137,8 @@ def _sorted(
         return {_key: x[_key] for _key in _keys}
     raise TypeError(f"[ERROR] Type {type(x)} is not supported.")
 
-# _filter_files
 
-
+# _filter_files - DEPRECATED
 def _filter_files(
     files: list,
     extensions: list = None,
@@ -229,5 +261,33 @@ def _head_tail(
 
     raise TypeError('list, dict, np.ndarray, pd.DataFrame are only supported!')
 
+
+# _estimate_root
+def _estimate_root(filepaths: pd.Series) -> str:
+    """Estimate root path
+
+    (NOTE)
+        Currently pd.Series is supported only
+
+    Args:
+        filepaths (pd.Series)
+
+    Returns:
+        str: root path
+    """
+
+    _split = (
+        filepaths
+        .str.strip('/')
+        .str.split('/', expand=True)
+    )
+    root = '/'
+    for _ in _split.columns:
+        levs = _split.loc[:, _].unique()
+        if len(levs) > 1:
+            break
+        root = os.path.join(root, levs[0])
+
+    return root
 
 # END

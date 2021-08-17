@@ -1,22 +1,21 @@
 import os
 from collections import Counter
-from datetime import datetime
 from typing import Union
 
 import numpy as np
 import pandas as pd
 from natsort import natsorted
+from pandas.core.arrays.categorical import Categorical
 from rich.console import Console
 from rich.filesize import decimal
-from watchdog.utils.dirsnapshot import DirectorySnapshot
 
-from .misc import _filter_files, _get_ext, _linl, _sorted
-from .rich_print import rich_tree
+from .directory import Directory
+from .misc import _gen_ordering_func, _get_ext, _linl, _sorted
 
 
-################################################################
+##############################################################################
 # is_ipython
-################################################################
+##############################################################################
 def is_ipython() -> bool:
     """Check if script is executed in IPython (incl. Jupyter)
 
@@ -38,9 +37,9 @@ def is_ipython() -> bool:
     return False
 
 
-################################################################
+##############################################################################
 # mlsorted
-################################################################
+##############################################################################
 def mlsorted(x: list, order: list = None) -> list:
     """Sort list by ML convention
 
@@ -57,39 +56,15 @@ def mlsorted(x: list, order: list = None) -> list:
         list: Sorted list
     """
     # default order
-    if order is None:
-        order = [
-            ['train'],
-            ['val', 'valid', 'validation'],
-            ['dev', 'develop', 'deveopment'],
-            ['test'],
-            ['eval', 'evaluate', 'evaluation'],
-            ['ok', 'neg', 'nega', 'negative'],
-            ['ng', 'pos', 'posi', 'positive'],
-        ]
+    _translate = _gen_ordering_func(order=order)
 
-    # generate map
-    _order = dict()
-    for i, _list in enumerate(order):
-        if not isinstance(_list, list):
-            _list = [_list]
-        _order.update(
-            {_elem: str(i) for _elem in _list}
-        )
-
-    # define translate
-    def _translate(x: str, _map: dict = _order):
-        y = x.lower()
-        for k, v in _map.items():
-            y = y.replace(k, v)
-        return y
-
+    # sort
     return natsorted(x, key=lambda x: _translate(x))
 
 
-################################################################
+##############################################################################
 # scnadir
-################################################################
+##############################################################################
 def scandir(
     root: Union[str, os.DirEntry],
     extensions: Union[str, os.DirEntry] = None,
@@ -147,25 +122,33 @@ def scandir(
     return results
 
 
-################################################################
+##############################################################################
 # tree_files
-# from rich_print.rich_tree
-################################################################
-tree = rich_tree
+##############################################################################
+if True:
+    from .rich_print import rich_tree
+    tree = rich_tree
 
 
-################################################################
+##############################################################################
 # table_files
-################################################################
+##############################################################################
 def table_files(
     root: str = '.',
-    snapshot: DirectorySnapshot = None,
     hrchy: Union[str, list] = None,
+    exts: Union[str, list] = None,
+    exts_ignore: Union[str, list] = None,
     subdirs: Union[str, list] = None,
-    extensions: Union[str, list] = None,
+    subdirs_ignore: Union[str, list] = None,
     include_meta: bool = False,
+    relpath: bool = False,
+    order: list = None,
+    reset_index: list = True,
 ) -> pd.DataFrame:
     """Make stat table (filename, filepath, ...) for given root directory
+
+    (Note)
+        It is just a wrapper of class 'Directory'.
 
     Examples:
         >>> df = table_files('./test_dataset')
@@ -177,99 +160,51 @@ def table_files(
             )
 
     Args:
-        root (str, optional): Path of root directory. Defaults to None.
-        snapshot (DirectorySnapshot, optional):
-            Use only when this function used in other functions.
-        hrchy (Union[str, list], optional):
-            Name each directory depth(= column name).
-        subdirs (Union[str, list], optional):
-            Subdirectories to include. None means all.
-        extensions (Union[str, list], optional):
-            Extensions to include. None means all.
-        include_meta (bool, optional):
-            Include metadata (size, modified datetime) or not.
+        root (str, os.DirEntry, optional): Defaults to '.'.
+        hrchy (str, list, optional):
+            Names of each depth of directory. Defaults to None.
+        exts (str, list, optional):
+            Extensions to include. Defaults to None.
+        exts_ignore (str, list, optional):
+            Extensions to ignore. Defaults to None.
+        subdirs (str, list, optional):
+            Subdirectories to include. Defaults to None.
+        subdirs_ignore (str, list, optional):
+            Subdirectories to ignore. Defaults to None.
+        relpath (bool, optional):
+            If true, 'filepath' becomes relative path. Defaults to False.
+        order (list, optional):
+            Custom order for table sorting. Defaults to None.
+        reset_index (bool, optional):
+            Reset index after filtering. Defaults to True.
 
     Returns:
         pd.DataFrame
     """
-
-    # temporary field
-    TEMP_FIELD = "__label"
-
-    # correct inputs
-    if root is not None:
-        root = os.path.relpath(root)
-    if hrchy is not None:
-        hrchy = _linl(hrchy, sep="/")
-    if extensions is not None:
-        extensions = _linl(extensions, sep=",")
-
-    # take a snapshot
-    if snapshot is None:
-        snapshot = DirectorySnapshot(root)
-    files = [fp for fp in snapshot.paths if os.path.isfile(fp)]
-
-    # filter by extensions
-    if extensions is not None:
-        files = _filter_files(files, extensions=extensions)
-
-    # filter by subdirs
-    if subdirs is not None:
-        files = _filter_files(files, subdirs=subdirs)
-
-    # sort list
-    files = mlsorted(files)
-
-    # create table
-    df = pd.DataFrame(
-        {
-            "__label": [x.rsplit("/", 1)[0] for x in files],
-            "filename": [x.rsplit("/", 1)[-1] for x in files],
-            "filepath": files,
-        }
+    directory = Directory(
+        root,
+        hrchy=hrchy,
+        exts=exts,
+        exts_ignore=exts_ignore,
+        subdirs=subdirs,
+        subdirs_ignore=subdirs_ignore,
+        include_meta=include_meta,
+        relpath=relpath,
+        order=order,
+        reset_index=reset_index
     )
 
-    # concat meta (size, created)
-    if include_meta:
-        _meta = pd.DataFrame(
-            {
-                "size": [snapshot._stat_info[fp].st_size for fp in files],
-                "modified": [
-                    datetime.fromtimestamp(snapshot._stat_info[fp].st_mtime)
-                    for fp in files
-                ],
-            }
-        )
-        df = pd.concat([df, _meta], axis=1)
-
-    # concat labels
-    labels = df[TEMP_FIELD].str.split("/", expand=True).iloc[:, 1:]
-    _ncols = labels.shape[1]
-
-    # set column names
-    if _ncols > 0:
-        if hrchy is None:
-            columns = [f"_lv{i+1}" for i in range(_ncols)]
-        else:
-            columns = hrchy + [f"_lv{i+1}" for i in range(len(hrchy), _ncols)]
-        labels.columns = columns
-
-        # concat labels and list of files
-        df = pd.concat([labels, df.drop(columns=TEMP_FIELD)], axis=1)
-    else:
-        df = df.drop(columns=TEMP_FIELD)
-
-    return df
+    return directory.table
 
 
-################################################################
+##############################################################################
 # encode labels
-################################################################
+# TODO use pd.get_dummies
+##############################################################################
 def encode_labels(
-    labels: Union[list, np.ndarray],
-    problem: str = 'multi-class',
-    sep: str = '|',
-    return_df=False
+    labels: Union[list, np.ndarray, pd.Series],
+    multi_label: bool = False,
+    sep: str = '|'
 ):
     """Encode labels
 
@@ -286,7 +221,7 @@ def encode_labels(
         )
         >>> # multi-label problem, a.k.a. one hot encoding
         >>> labels = ['dog', 'cat', 'dog|cat']
-        >>> encode_labels(labels, problem='multi-label')
+        >>> encode_labels(labels, multi_label=True)
         (
             [[0, 1], [1, 0], [1, 1]],
             {'dog': 0, 'cat': 1},
@@ -295,10 +230,8 @@ def encode_labels(
 
     Args:
         labels (list, np.ndarray): List of labels with string elements.
-        output (str, optional): 'multi-label' or 'multi-class'.
+        multi_label (bool, optional): Is multi label classification.
         sep (str, optional): For multi-label only. Default is '|'.
-        return_df (bool, optional):
-            If true, return DataFrame. Defaults is False.
 
     Returns:
         list or np.array: Coded labels. List in list out, array in array out.
@@ -306,24 +239,14 @@ def encode_labels(
         dict: decoder
     """
 
-    MULTI_CLASS = ['multiclass', 'multiclasses', 'mc']
-    MULTI_LABEL = ['multilabel', 'multilabels', 'ml']
-
-    # correct parameters
-    problem = (
-        problem
-        .replace('-', '').replace('_', '').replace(' ', '')
-        .lower()
-    )
-
     # get classes
-    if problem in MULTI_CLASS:
-        classes = mlsorted(set(labels))
-    elif problem in MULTI_LABEL:
-        classes = {labs for item in labels for labs in item.split(sep)}
+    if not multi_label:
+        classes = mlsorted(filter(None, set(labels)))
     else:
-        raise
-    classes = mlsorted(classes)
+        classes = mlsorted(
+            {labs for item in filter(None, labels) for labs in item.split(sep)}
+        )
+    classes = [_ for _ in classes if _ not in ['']]
     n_classes = len(classes)
 
     # generate encoder and decoder
@@ -331,32 +254,37 @@ def encode_labels(
     decoder = {v: k for k, v in encoder.items()}
 
     # create coded labels
-    if problem in MULTI_CLASS:
-        coded_labels = [encoder[x] for x in labels]
-    elif problem in MULTI_LABEL:
+    if not multi_label:
+        coded_labels = [encoder[x] if x is not None else x for x in labels]
+    else:
         coded_labels = list()
         for x in labels:
             labs = [0] * n_classes
-            for lab in x.split(sep):
-                labs[encoder[lab]] = 1
+            if x is not None:
+                for lab in x.split(sep):
+                    labs[encoder[lab]] = 1
             coded_labels.append(labs)
 
     # to numpy or to dataframe
-    if return_df:
-        if problem in MULTI_LABEL:
-            coded_labels = pd.DataFrame(coded_labels, columns=encoder.keys())
+    if isinstance(labels, (pd.Series, pd.DataFrame)):
+        if multi_label:
+            coded_labels = pd.DataFrame(
+                coded_labels, columns=encoder.keys()
+            )
         else:
-            coded_labels = pd.DataFrame({'y': coded_labels}, dtype=np.int32)
-    else:
-        if isinstance(labels, np.ndarray):
-            coded_labels = np.array(coded_labels, dtype=np.int32)
+            coded_labels = pd.DataFrame(
+                {'y': coded_labels}, dtype=np.int32
+            )
+    elif isinstance(labels, (np.ndarray, Categorical)):
+        coded_labels = np.array(coded_labels, dtype=np.int32)
 
     return coded_labels, encoder, decoder
 
 
-################################################################
+##############################################################################
 # encode labels
-################################################################
+# TODO use Directory instead of scandir, and remove scandir from module
+##############################################################################
 def inspect_dir(root, console=None):
 
     # duplicated

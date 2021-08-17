@@ -9,7 +9,8 @@ from rich.table import Table
 from rich.text import Text
 from rich.tree import Tree
 
-from .misc import _linl, _head_tail
+from .misc import _head_tail, _linl
+from .common import mlsorted
 
 
 ################################################################
@@ -96,10 +97,7 @@ def _generate_tree(
         }
 
     # sort dirs first then by filename
-    entries = sorted(
-        os.scandir(root),
-        key=lambda path: (os.path.isfile(path), path.path.lower()),
-    )
+    entries = mlsorted(os.scandir(root))
 
     # split directories and files
     dirs, paths = [], []

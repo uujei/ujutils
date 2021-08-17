@@ -1,15 +1,14 @@
 import itertools
 import os
-from collections import Counter
 
 import click
 from InquirerPy import inquirer
 from rich.console import Console
-from watchdog.utils.dirsnapshot import DirectorySnapshot
 
-from ..common import mlsorted, table_files, inspect_dir
+from ..directory import Directory
+from ..common import mlsorted, inspect_dir
 from ..config import _STYLE, CHECKBOX_STYLE, EXTS_IMAGE, EXTS_SIGNAL, EXTS_TEXT
-from ..misc import _drop_root, _filter_files, _linl
+from ..misc import _linl
 from ..rich_print import rich_table, rich_tree
 
 
@@ -17,11 +16,11 @@ from ..rich_print import rich_table, rich_tree
 # CLI helpers
 ################################################################
 # (helper) _user_select_extensions
-def _user_select_extensions():
+def _user_select_extensions() -> list:
     """User select extensions
 
     Returns:
-        [type]: [description]
+        list: list of extensions
     """
     choices = {
         'All': None,
@@ -48,7 +47,7 @@ def _user_select_extensions():
 
 
 # (helper) _user_select_subdirs
-def _user_select_subdirs(files: list) -> list:
+def _user_select_subdirs(directory: Directory) -> list:
     """User selects subdirs from checkbox
 
     Args:
@@ -57,14 +56,12 @@ def _user_select_subdirs(files: list) -> list:
     Returns:
         list: list of selected subdirs
     """
-    _dirs = Counter(
-        mlsorted([os.path.dirname(x) for x in files])
-    )
+    _dirs = directory.table.value_counts('reldir').to_dict()
 
     def q(_):
         return [
             {
-                "name": f"{_drop_root(k)} ({v} files)",
+                "name": f"{k} ({v} files)",
                 "value": k,
                 "enabled": False
             } for k, v in _dirs.items()
@@ -82,7 +79,7 @@ def _user_select_subdirs(files: list) -> list:
 
 
 # (helper) _get_levs_from_hrchy
-def _user_set_hrchy(subdirs: list) -> list:
+def _user_set_hrchy(directory) -> list:
     """User sets name of hierarchy levels
 
     Examples:
@@ -99,9 +96,9 @@ def _user_set_hrchy(subdirs: list) -> list:
         list: [description]
     """
 
-    subdirs = [_drop_root(_) for _ in subdirs]
+    subdirs = mlsorted(directory.table['reldir'].unique())
 
-    if subdirs != ['.']:
+    if subdirs != ['']:
         _transpose = itertools.zip_longest(*[_.split('/') for _ in subdirs])
         _columns = [
             ', '.join(mlsorted(filter(None, set(_)))) for _ in _transpose
@@ -141,49 +138,47 @@ def cli_table_files(root='.'):
 
     # take a snapshot
     console.print("Scan direcotry...", end=' ')
-    snapshot = DirectorySnapshot(root)
-    files = [fp for fp in snapshot.paths if os.path.isfile(fp)]
+    directory = Directory(root)
     console.print("DONE!")
 
     # START INSTRUCTION
     console.print(
-        ' '.join(
-            [
-                "Follow the instruction below.",
-                "('ctrl + C' to quit, 'alt + a' to select all)"
-            ]
-        )
+        ' '.join([
+            "Follow the instruction below.",
+            "('ctrl + C' to quit, 'alt + a' to select all)"
+        ])
     )
 
     # select extensions and filter
-    extensions = _user_select_extensions()
-    files = _filter_files(files, extensions=extensions)
+    directory.exts = _user_select_extensions()
 
     # check whether meta is included
-    include_meta = inquirer.confirm(
+    directory.include_meta = inquirer.confirm(
         message="Include metadata? (size, modified time):",
         default=False
     ).execute()
 
     # select subdirs and filter
-    subdirs = _user_select_subdirs(files)
+    directory.subdirs = _user_select_subdirs(directory)
 
     # set column names
-    hrchy = _user_set_hrchy(subdirs)
+    # I'M HERE!!!
+    directory.hrchy = _user_set_hrchy(directory)
 
     # create table
-    df = table_files(
-        snapshot=snapshot, hrchy=hrchy, subdirs=subdirs, extensions=extensions,
-        include_meta=include_meta
-    )
+    df = directory.table
 
     # preview results
     _n = len(df)
+    _head, _tail = 10, 10
     rich_table(
         df,
-        title=f"\n[bold][Preview][/bold] Table of Files (total {_n} rows)",
-        head=10,
-        tail=10,
+        title=' '.join([
+            f"\n[bold][Result][/bold] Preview table",
+            f"(print {_head+_tail} lines / total {_n} rows)",
+        ]),
+        head=_head,
+        tail=_tail,
         console=console
     )
     print('')
@@ -217,7 +212,7 @@ def cli_table_files(root='.'):
     return
 
 
-# cli_tree_files
+# cli_tree
 @click.command()
 @click.argument('root', nargs=1)
 @click.option(
