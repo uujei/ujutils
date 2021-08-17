@@ -174,7 +174,7 @@ def cli_table_files(root='.'):
     rich_table(
         df,
         title=' '.join([
-            f"\n[bold][Result][/bold] Preview table",
+            "\n[bold][Result][/bold] Preview table",
             f"(print {_head+_tail} lines / total {_n} rows)",
         ]),
         head=_head,

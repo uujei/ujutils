@@ -1,6 +1,4 @@
 import pandas as pd
-import numpy as np
-import requests
 import streamlit as st
 from PIL import Image
 from ujutils.misc import _estimate_root
